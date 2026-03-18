@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { useAppStore } from '../store/appStore';
 import { QrCodeModal } from '../components/QrCodeModal';
 
@@ -12,10 +13,23 @@ const TOP_UP_OPTIONS = [
 ];
 
 export function DashboardScreen() {
-  const { user, accessToken, setScreen, setSessionId } = useAppStore();
+  const { user, accessToken, setScreen, setSessionId, setBalance } = useAppStore();
   const [qrData, setQrData] = useState<{ qrCodeText: string; amountCents: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const socket = io(`${API_URL}/sessions`, { auth: { token: accessToken } });
+    socketRef.current = socket;
+    socket.on('connect', () => socket.emit('join'));
+    socket.on('payment_confirmed', (data: { balance_cents: number }) => {
+      setBalance(data.balance_cents);
+      setQrData(null);
+    });
+    return () => { socket.disconnect(); socketRef.current = null; };
+  }, [accessToken]);
 
   const balance = user ? (user.balance_cents / 100).toFixed(2).replace('.', ',') : '0,00';
 

@@ -24,7 +24,8 @@ export class PaymentsController {
     @Headers('x-webhook-secret') secret: string,
     @Body() body: any,
   ) {
-    if (secret !== process.env.ABACATEPAY_WEBHOOK_SECRET) {
+    const expectedSecret = process.env.ABACATEPAY_WEBHOOK_SECRET;
+    if (expectedSecret && secret !== expectedSecret) {
       throw new ForbiddenException('Invalid webhook secret');
     }
     return this.paymentsService.handleWebhook(body.id, body.status);

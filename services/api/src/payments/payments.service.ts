@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AbacatePayClient } from './abacatepay.client';
+import { SessionsGateway } from '../sessions/sessions.gateway';
 
 @Injectable()
 export class PaymentsService {
@@ -9,6 +10,7 @@ export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private abacatePay: AbacatePayClient,
+    private gateway: SessionsGateway,
   ) {}
 
   async createPix(userId: string, amountCents: number) {
@@ -45,7 +47,14 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({
       where: { abacatepay_id: abacatepayId },
     });
-    if (!payment || payment.status === 'paid') return { received: true };
+    if (!payment) {
+      this.logger.warn(`Webhook: payment not found for abacatepay_id=${abacatepayId}`);
+      return { received: true };
+    }
+    if (payment.status === 'paid') {
+      this.logger.warn(`Webhook: payment ${payment.id} already paid`);
+      return { received: true };
+    }
 
     await this.prisma.$transaction([
       this.prisma.payment.update({
@@ -57,6 +66,9 @@ export class PaymentsService {
         data: { balance_cents: { increment: payment.amount_cents } },
       }),
     ]);
+
+    const updatedUser = await this.prisma.user.findUnique({ where: { id: payment.user_id } });
+    this.gateway.emitPaymentConfirmed(payment.user_id, updatedUser!.balance_cents);
 
     this.logger.log(`Payment ${payment.id} confirmed, added ${payment.amount_cents} cents to user ${payment.user_id}`);
     return { received: true };

@@ -58,7 +58,9 @@ packages/shared/        — Shared TypeScript types (@gamer-machine/shared)
 1. **Kiosk window** (`kioskWindow`): fullscreen, kiosk mode, keyboard locked. Hosts the main React app (auth + dashboard screens).
 2. **Overlay window** (`overlayWindow`): transparent, always-on-top, `focusable: false`, `type: 'toolbar'`. Hosts the overlay UI (`?overlay=true`) that shows warnings while the user is gaming. Created when session starts, destroyed when session ends.
 
-The WebSocket client lives in the **main process** (`WindowManager`), not the renderer. It forwards events to both windows via IPC.
+The WebSocket client for **session events** lives in the **main process** (`WindowManager`), not the renderer. It forwards events to both windows via IPC.
+
+**Exception — Dashboard payment events**: `DashboardScreen` connects its own socket.io client directly in the renderer (not via `WindowManager`) to receive `payment_confirmed` events. This is intentional: `WindowManager` only connects during active sessions, but payment confirmations can arrive while on the Dashboard.
 
 ### Session Flow
 1. User authenticates via phone + OTP → receives JWT
@@ -90,9 +92,12 @@ The WebSocket client lives in the **main process** (`WindowManager`), not the re
 screen: 'PHONE_INPUT' | 'OTP_INPUT' | 'DASHBOARD' | 'PLAYING'
 overlayState: 'HIDDEN' | 'WARNING_1MIN' | 'WARNING_30SEC' | 'SESSION_ENDED'
 ```
-Actions: `setAuth`, `setScreen`, `updateBalance`, `setSessionId`, `setOverlayState`, `clearSession`, `logout`
+Actions: `setAuth`, `setScreen`, `updateBalance`, `setBalance`, `setSessionId`, `setOverlayState`, `clearSession`, `logout`
 
-### IPC Channels
+- `updateBalance(balance_cents, timeRemainingSeconds)` — used by session timer events (also updates `timeRemainingSeconds`)
+- `setBalance(balance_cents)` — used by payment confirmations (balance only, no session state)
+
+### IPC Channels (Electron Main ↔ Renderer)
 | Channel | Direction | Description |
 |---|---|---|
 | `session:start` | invoke | Start session, returns `{ sessionId }` |
@@ -100,6 +105,13 @@ Actions: `setAuth`, `setScreen`, `updateBalance`, `setSessionId`, `setOverlaySta
 | `balance_update` | event → renderer | `{ balance_cents, time_remaining_seconds, session_id }` |
 | `warning` | event → renderer | `{ type: 'WARNING_1MIN' \| 'WARNING_30SEC' \| 'SESSION_ENDED' }` |
 | `session_ended` | event → renderer | Sent to kiosk window when locking |
+
+### WebSocket Events (API → Renderer, Socket.io `/sessions`)
+| Event | Payload | Listener |
+|---|---|---|
+| `balance_update` | `{ balance_cents, time_remaining_seconds, session_id }` | `WindowManager` → IPC → `KioskApp` |
+| `warning` | `{ type: 'WARNING_1MIN' \| 'WARNING_30SEC' \| 'SESSION_ENDED' }` | `WindowManager` → IPC → `KioskApp` |
+| `payment_confirmed` | `{ balance_cents }` | `DashboardScreen` (direct socket.io in renderer) |
 
 ### Shared Types
 Import from `@gamer-machine/shared`. All API DTOs are defined there. Never duplicate type definitions across packages.
@@ -121,7 +133,10 @@ Import from `@gamer-machine/shared`. All API DTOs are defined there. Never dupli
 `SmsService` checks for `AWS_ACCESS_KEY_ID` at construction. If absent, all OTP sends log to console (`[SMS MOCK]`) instead of hitting SNS. No env var or flag needed to enable mock mode.
 
 **PIX mock — automatic**
-`AbacatePayClient` checks for `ABACATEPAY_API_KEY`. If absent, returns a fake `brCode` and a 1×1 PNG base64 as `brCodeBase64`. Webhook handling still works (POST `/payments/webhook`), so end-to-end payment flow can be tested manually.
+`AbacatePayClient` checks for `ABACATEPAY_API_KEY`. If absent, returns a fake `brCode` and a 1×1 PNG base64 as `brCodeBase64`. If present, calls the real AbacatePay API — the response returns a payment URL (not a raw PIX brCode), so `brCodeBase64` will be empty and `qr_code_text` will be the payment page URL. The `QrCodeModal` generates the QR from `qr_code_text` either way via `qrcode.react`.
+
+**PIX webhook secret — optional**
+`POST /payments/webhook` only enforces `x-webhook-secret` if `ABACATEPAY_WEBHOOK_SECRET` is set in the env. If the env var is empty/absent, all webhook POSTs are accepted (useful for local testing, remove this bypass before going to production).
 
 **Overlay window type**
 Uses `type: 'toolbar'` (not `'screen-saver'`) and `focusable: false` + `setIgnoreMouseEvents(true)`. This keeps it on top of fullscreen games on Windows without stealing focus or mouse input.
@@ -144,7 +159,6 @@ Uses `type: 'toolbar'` (not `'screen-saver'`) and `focusable: false` + `setIgnor
 - Shared types package
 
 ### Pending / Not Yet Done
-- `prisma migrate dev` has not been run — **no migrations exist yet**
 - ESLint config not set up in any package
 - Electron packaging (`electron-builder`) not configured
 - No automated tests

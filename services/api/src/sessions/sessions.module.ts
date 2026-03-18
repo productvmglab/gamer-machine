@@ -12,6 +12,6 @@ import { SessionsGateway } from './sessions.gateway';
   ],
   providers: [SessionsService, SessionsGateway],
   controllers: [SessionsController],
-  exports: [SessionsService],
+  exports: [SessionsService, SessionsGateway],
 })
 export class SessionsModule {}

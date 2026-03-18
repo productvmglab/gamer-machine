@@ -22,6 +22,7 @@ interface AppState {
   setAuth: (token: string, user: UserData) => void;
   setScreen: (screen: Screen) => void;
   updateBalance: (balance_cents: number, timeRemaining: number) => void;
+  setBalance: (balance_cents: number) => void;
   setSessionId: (id: string | null) => void;
   setOverlayState: (state: OverlayState) => void;
   clearSession: () => void;
@@ -42,6 +43,8 @@ export const useAppStore = create<AppState>((set) => ({
   setScreen: (screen) => set({ screen }),
   updateBalance: (balance_cents, timeRemainingSeconds) =>
     set((s) => ({ user: s.user ? { ...s.user, balance_cents } : null, timeRemainingSeconds })),
+  setBalance: (balance_cents) =>
+    set((s) => ({ user: s.user ? { ...s.user, balance_cents } : null })),
   setSessionId: (sessionId) => set({ sessionId }),
   setOverlayState: (overlayState) => set({ overlayState }),
   clearSession: () => set({ sessionId: null, screen: 'DASHBOARD', overlayState: 'HIDDEN' }),
