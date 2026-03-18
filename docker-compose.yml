@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: gamer_machine_api
+    env_file:
+      - services/api/.env
+    environment:
+      # Override DATABASE_URL to use internal Docker network (postgres service, port 5432)
+      DATABASE_URL: postgresql://gamer:gamer@postgres:5432/gamer_machine
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
