@@ -101,7 +101,7 @@ export default function UserDetailPage() {
     try {
       setOtp(await getActiveOtp(phone));
     } catch (err: any) {
-      setOtpError(err.message === 'NOT_FOUND' ? 'Nenhum código ativo. O cliente precisa digitar o telefone no kiosk primeiro.' : err.message);
+      setOtpError(err.message);
     } finally {
       setOtpLoading(false);
     }
@@ -188,14 +188,14 @@ export default function UserDetailPage() {
       <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
         <h3 className="font-bold text-gray-800 mb-3">Código de Acesso (OTP)</h3>
         <p className="text-gray-500 text-sm mb-3">
-          Use após o cliente digitar o telefone no kiosk. O código expira em 5 minutos.
+          Gera ou recupera o código ativo para o cliente digitar no kiosk. Expira em 5 minutos.
         </p>
         <button
           onClick={handleFetchOtp}
           disabled={otpLoading}
           className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors"
         >
-          {otpLoading ? 'Buscando...' : 'Ver código ativo'}
+          {otpLoading ? 'Aguarde...' : 'Ver código de acesso'}
         </button>
         {otp && (
           <div className="mt-4 bg-indigo-50 rounded-xl p-4 text-center">

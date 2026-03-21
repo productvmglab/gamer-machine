@@ -67,11 +67,19 @@ export class AdminService {
   }
 
   async getActiveOtp(phone: string) {
-    const otp = await this.prisma.otpCode.findFirst({
+    await this.usersService.findOrCreate(phone);
+
+    let otp = await this.prisma.otpCode.findFirst({
       where: { phone, used: false, expires_at: { gt: new Date() } },
       orderBy: { created_at: 'desc' },
     });
-    if (!otp) throw new NotFoundException('Nenhum código ativo para este telefone');
+
+    if (!otp) {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires_at = new Date(Date.now() + 5 * 60 * 1000);
+      otp = await this.prisma.otpCode.create({ data: { phone, code, expires_at } });
+    }
+
     return { code: otp.code, expires_at: otp.expires_at.toISOString() };
   }
 
