@@ -21,6 +21,7 @@ export class PaymentsService {
       data: {
         user_id: userId,
         amount_cents: amountCents,
+        source: 'pix',
         abacatepay_id: pixData.id,
         qr_code: pixData.brCodeBase64,
         qr_code_text: pixData.brCode,

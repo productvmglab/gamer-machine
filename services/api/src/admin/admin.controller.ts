@@ -52,4 +52,16 @@ export class AdminController {
   addCredit(@Param('phone') phone: string, @Body() body: AddCreditDto) {
     return this.adminService.addCredit(phone, body.amount_cents);
   }
+
+  @Get('users/:phone/deposits')
+  @UseGuards(AdminJwtGuard)
+  getDepositHistory(@Param('phone') phone: string) {
+    return this.adminService.getDepositHistory(phone);
+  }
+
+  @Get('users/:phone/sessions')
+  @UseGuards(AdminJwtGuard)
+  getUsageHistory(@Param('phone') phone: string) {
+    return this.adminService.getUsageHistory(phone);
+  }
 }

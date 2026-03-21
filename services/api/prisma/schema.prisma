@@ -43,6 +43,7 @@ model Payment {
   user_id       String
   amount_cents  Int
   status        PaymentStatus @default(pending)
+  source        PaymentSource @default(pix)
   abacatepay_id String?       @unique
   qr_code       String?       @db.Text
   qr_code_text  String?       @db.Text
@@ -54,4 +55,9 @@ enum PaymentStatus {
   pending
   paid
   expired
+}
+
+enum PaymentSource {
+  pix
+  admin
 }

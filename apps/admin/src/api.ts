@@ -7,6 +7,21 @@ export interface AdminUser {
   created_at: string;
 }
 
+export interface Deposit {
+  id: string;
+  amount_cents: number;
+  source: 'pix' | 'admin';
+  created_at: string;
+}
+
+export interface SessionRecord {
+  id: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  cost_cents: number;
+}
+
 const TOKEN_KEY = 'admin_token';
 
 export function getToken(): string | null {
@@ -64,5 +79,23 @@ export async function addCredit(phone: string, amountCents: number): Promise<Adm
   });
   if (res.status === 401) { clearToken(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro ao adicionar crédito');
+  return res.json();
+}
+
+export async function getDeposits(phone: string): Promise<Deposit[]> {
+  const res = await fetch(`${API_URL}/admin/users/${encodeURIComponent(phone)}/deposits`, {
+    headers: authHeaders(),
+  });
+  if (res.status === 401) { clearToken(); throw new Error('Sessão expirada'); }
+  if (!res.ok) throw new Error('Erro ao buscar depósitos');
+  return res.json();
+}
+
+export async function getSessions(phone: string): Promise<SessionRecord[]> {
+  const res = await fetch(`${API_URL}/admin/users/${encodeURIComponent(phone)}/sessions`, {
+    headers: authHeaders(),
+  });
+  if (res.status === 401) { clearToken(); throw new Error('Sessão expirada'); }
+  if (!res.ok) throw new Error('Erro ao buscar sessões');
   return res.json();
 }

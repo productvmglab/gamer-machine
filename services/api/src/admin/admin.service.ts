@@ -46,6 +46,7 @@ export class AdminService {
           user_id: user.id,
           amount_cents,
           status: 'paid',
+          source: 'admin',
         },
       }),
       this.prisma.user.update({
@@ -57,5 +58,25 @@ export class AdminService {
     const updatedUser = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     this.gateway.emitPaymentConfirmed(user.id, updatedUser.balance_cents);
     return updatedUser;
+  }
+
+  async getDepositHistory(phone: string) {
+    const user = await this.usersService.findByPhone(phone);
+    if (!user) throw new NotFoundException(`User with phone ${phone} not found`);
+    return this.prisma.payment.findMany({
+      where: { user_id: user.id, status: 'paid' },
+      orderBy: { created_at: 'desc' },
+      select: { id: true, amount_cents: true, source: true, created_at: true },
+    });
+  }
+
+  async getUsageHistory(phone: string) {
+    const user = await this.usersService.findByPhone(phone);
+    if (!user) throw new NotFoundException(`User with phone ${phone} not found`);
+    return this.prisma.session.findMany({
+      where: { user_id: user.id, ended_at: { not: null } },
+      orderBy: { started_at: 'desc' },
+      select: { id: true, started_at: true, ended_at: true, duration_seconds: true, cost_cents: true },
+    });
   }
 }
