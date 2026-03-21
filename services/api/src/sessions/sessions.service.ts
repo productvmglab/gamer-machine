@@ -27,8 +27,11 @@ export class SessionsService {
       data: { user_id: userId },
     });
 
+    const pricePerMin = this.getPricePerMinuteCents();
+    const time_remaining_seconds = Math.floor((user.balance_cents / pricePerMin) * 60);
+
     this.scheduleTimer(session.id, userId, session.started_at);
-    return { session };
+    return { session, balance_cents: user.balance_cents, time_remaining_seconds };
   }
 
   private scheduleTimer(sessionId: string, userId: string, startedAt: Date) {

@@ -5,22 +5,17 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { forwardRef, Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import type { BalanceUpdatePayload, WarningPayload } from '@gamer-machine/shared';
-import { SessionsService } from './sessions.service';
 
 @WebSocketGateway({ namespace: '/sessions', cors: { origin: '*' } })
 export class SessionsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(SessionsGateway.name);
 
-  constructor(
-    private jwtService: JwtService,
-    @Inject(forwardRef(() => SessionsService))
-    private sessionsService: SessionsService,
-  ) {}
+  constructor(private jwtService: JwtService) {}
 
   handleConnection(client: Socket) {
     try {
@@ -33,19 +28,12 @@ export class SessionsGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  async handleDisconnect(client: Socket) {
+  handleDisconnect(client: Socket) {
     const userId = (client as any).userId as string | undefined;
-    this.logger.log(`Client disconnected: ${client.id}`);
-    if (!userId) return;
-    try {
-      const active = await this.sessionsService.findActiveSession(userId);
-      if (active) {
-        this.logger.log(`Ending orphaned session ${active.id} for user ${userId}`);
-        await this.sessionsService.endSession(active.id);
-      }
-    } catch (err) {
-      this.logger.error(`Failed to end session on disconnect for user ${userId}`, err);
-    }
+    this.logger.log(`Client disconnected: ${client.id} user: ${userId ?? 'unknown'}`);
+    // Session lifecycle is managed by the server-side timer in SessionsService.
+    // Do NOT end sessions on disconnect — the DashboardScreen and other clients
+    // also connect to this namespace and their disconnect must not end the session.
   }
 
   @SubscribeMessage('join')

@@ -3,7 +3,7 @@ import { join } from 'path';
 import { setupShortcutBlocker, releaseShortcutBlocker } from './shortcutBlocker';
 import { WindowManager } from './windowManager';
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const isDev = process.env.NODE_ENV !== 'production' && !app.isPackaged;
 
 let windowManager: WindowManager;
 
@@ -33,7 +33,7 @@ ipcMain.handle('session:start', async (_event, token: string) => {
     const data = await res.json() as any;
     if (!res.ok) throw new Error(data.message ?? 'Failed to start session');
 
-    windowManager.unlockKiosk(token, data.session.id);
+    windowManager.unlockKiosk(token, data.session.id, data.balance_cents, data.time_remaining_seconds);
     return { sessionId: data.session.id };
   } catch (err: any) {
     throw new Error(err.message ?? 'Failed to start session');
@@ -53,6 +53,16 @@ ipcMain.handle('session:end', async (_event, sessionId: string, token: string) =
   } catch (err: any) {
     throw new Error(err.message ?? 'Failed to end session');
   }
+});
+
+// IPC: End current session (called from overlay)
+ipcMain.handle('session:end:current', async () => {
+  await windowManager.endCurrentSession();
+});
+
+// IPC: Toggle overlay mouse ignore (for clickable elements in overlay)
+ipcMain.on('overlay:set-ignore-mouse', (_event, ignore: boolean) => {
+  windowManager.setOverlayIgnoreMouse(ignore);
 });
 
 // Crash recovery

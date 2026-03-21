@@ -13,6 +13,8 @@ declare global {
       onWarning: (cb: (data: any) => void) => void;
       onSessionEnded: (cb: () => void) => void;
       removeAllListeners: (channel: string) => void;
+      endCurrentSession: () => Promise<void>;
+      setIgnoreMouse: (ignore: boolean) => void;
     };
   }
 }

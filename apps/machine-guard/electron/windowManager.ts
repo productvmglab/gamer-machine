@@ -2,18 +2,42 @@ import { BrowserWindow, screen } from 'electron';
 import { join } from 'path';
 import { io, Socket } from 'socket.io-client';
 
-const isDev = process.env.NODE_ENV === 'development' || !process.env.ELECTRON_RENDERER_URL;
+const isDev = process.env.NODE_ENV !== 'production' && !process.env.ELECTRON_RENDERER_URL;
 
 export class WindowManager {
   private kioskWindow: BrowserWindow | null = null;
   private overlayWindow: BrowserWindow | null = null;
   private wsClient: Socket | null = null;
+  private currentToken: string | null = null;
+  private currentSessionId: string | null = null;
+  private currentBalanceCents: number = 0;
+  private currentTimeRemaining: number = 0;
 
   constructor(private dev: boolean) {}
 
   private getRendererUrl(path = '') {
     if (this.dev) return `http://localhost:5173${path}`;
     return `file://${join(__dirname, '../dist/index.html')}${path}`;
+  }
+
+  setOverlayIgnoreMouse(ignore: boolean) {
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      this.overlayWindow.setIgnoreMouseEvents(ignore, { forward: true });
+    }
+  }
+
+  async endCurrentSession() {
+    if (!this.currentToken || !this.currentSessionId) return;
+    try {
+      await fetch('http://localhost:3001/sessions/end', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.currentToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: this.currentSessionId }),
+      });
+    } catch (err) {
+      console.error('Failed to end session from overlay:', err);
+    }
+    this.lockKiosk();
   }
 
   createKioskWindow() {
@@ -29,8 +53,12 @@ export class WindowManager {
     this.kioskWindow.loadURL(this.getRendererUrl());
   }
 
-  unlockKiosk(token: string, sessionId: string) {
+  unlockKiosk(token: string, sessionId: string, balanceCents: number, timeRemaining: number) {
     if (!this.kioskWindow) return;
+    this.currentToken = token;
+    this.currentSessionId = sessionId;
+    this.currentBalanceCents = balanceCents ?? 0;
+    this.currentTimeRemaining = timeRemaining ?? 0;
     this.kioskWindow.setKiosk(false);
     this.kioskWindow.minimize();
     this.kioskWindow.hide();
@@ -40,6 +68,8 @@ export class WindowManager {
   }
 
   lockKiosk() {
+    this.currentToken = null;
+    this.currentSessionId = null;
     this.disconnectWebSocket();
     if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
       this.overlayWindow.close();
@@ -62,6 +92,7 @@ export class WindowManager {
       x: 0,
       y: 0,
       transparent: true,
+      backgroundColor: '#00000000',
       frame: false,
       alwaysOnTop: true,
       type: 'toolbar',
@@ -72,7 +103,15 @@ export class WindowManager {
 
     const url = this.getRendererUrl('?overlay=true');
     this.overlayWindow.loadURL(url);
-    this.overlayWindow.setIgnoreMouseEvents(true);
+    this.overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+
+    this.overlayWindow.webContents.once('did-finish-load', () => {
+      this.overlayWindow?.webContents.send('balance_update', {
+        balance_cents: this.currentBalanceCents,
+        time_remaining_seconds: this.currentTimeRemaining,
+        session_id: this.currentSessionId,
+      });
+    });
   }
 
   private connectWebSocket(token: string, sessionId: string) {
