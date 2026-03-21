@@ -57,12 +57,13 @@ export default function UserDetailPage() {
       });
   }, [phone]);
 
-  async function handleSaveName(e: FormEvent) {
-    e.preventDefault();
+  async function handleNameBlur() {
+    const trimmed = nameInput.trim();
+    if (trimmed.length < 2 || trimmed === (user?.name ?? '')) return;
     setSavingName(true);
     setNameSuccess(false);
     try {
-      const updated = await updateUser(phone, nameInput.trim());
+      const updated = await updateUser(phone, trimmed);
       setUser(updated);
       setNotFound(false);
       setNameSuccess(true);
@@ -124,29 +125,22 @@ export default function UserDetailPage() {
         <h2 className="text-xl font-mono font-bold mb-4">{phone}</h2>
 
         {/* Nome */}
-        <form onSubmit={handleSaveName} className="mb-6">
+        <div className="mb-6">
           <label className="text-sm text-gray-600 mb-1 block">Nome do cliente</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Nome completo"
-              value={nameInput}
-              onChange={e => { setNameInput(e.target.value); setNameSuccess(false); }}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={savingName || nameInput.trim().length < 2}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold rounded-lg px-4 py-2 transition-colors text-sm"
-            >
-              {savingName ? '...' : 'Salvar'}
-            </button>
-          </div>
+          <input
+            type="text"
+            placeholder="Nome completo"
+            value={nameInput}
+            onChange={e => { setNameInput(e.target.value); setNameSuccess(false); }}
+            onBlur={handleNameBlur}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {savingName && <p className="text-gray-400 text-xs mt-1">Salvando...</p>}
           {nameSuccess && <p className="text-green-600 text-xs mt-1">Nome salvo.</p>}
           {!hasName && !notFound && (
             <p className="text-amber-600 text-xs mt-1">Preencha o nome antes de adicionar crédito.</p>
           )}
-        </form>
+        </div>
 
         <p className="text-gray-500 text-sm mb-1">Saldo atual</p>
         <p className="text-3xl font-bold text-green-600 mb-6">{fmtMoney(balance)}</p>
