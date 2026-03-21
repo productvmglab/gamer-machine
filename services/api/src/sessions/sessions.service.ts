@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsGateway } from './sessions.gateway';
 
@@ -10,6 +10,7 @@ export class SessionsService {
 
   constructor(
     private prisma: PrismaService,
+    @Inject(forwardRef(() => SessionsGateway))
     private gateway: SessionsGateway,
   ) {}
 
@@ -70,9 +71,14 @@ export class SessionsService {
     this.timers.set(sessionId, interval);
   }
 
+  async findActiveSession(userId: string) {
+    return this.prisma.session.findFirst({ where: { user_id: userId, ended_at: null } });
+  }
+
   async endSession(sessionId: string) {
     const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Session not found');
+    if (session.ended_at) return { session_id: sessionId, cost_cents: session.cost_cents, duration_seconds: session.duration_seconds };
 
     this.clearTimer(sessionId);
 
