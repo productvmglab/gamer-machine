@@ -57,6 +57,10 @@ export class AuthService {
         phone: user.phone,
         name: user.name ?? null,
         balance_cents: user.balance_cents,
+        email: user.email ?? null,
+        cpf: user.cpf ?? null,
+        email_verified: user.email_verified,
+        profile_locked: user.profile_locked,
         created_at: user.created_at.toISOString(),
       },
     };

@@ -1,5 +1,7 @@
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
+import { SessionsGateway } from '../sessions/sessions.gateway';
 
 const makePrismaMock = () =>
   ({
@@ -8,6 +10,9 @@ const makePrismaMock = () =>
       upsert: jest.fn(),
     },
   }) as unknown as PrismaService;
+
+const makeEmailMock = () => ({ sendOtp: jest.fn() }) as unknown as EmailService;
+const makeGatewayMock = () => ({ emitPaymentConfirmed: jest.fn() }) as unknown as SessionsGateway;
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -20,7 +25,7 @@ describe('UsersService', () => {
 
   beforeEach(() => {
     prisma = makePrismaMock();
-    service = new UsersService(prisma);
+    service = new UsersService(prisma, makeEmailMock(), makeGatewayMock());
   });
 
   describe('findOrCreate', () => {
