@@ -1,0 +1,29 @@
+# Override para simular o servidor de produção (1 vCPU, 512 MB RAM)
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f load-test/docker-compose.load-test.yml up -d
+#
+# Budget de RAM:
+#   OS + Docker daemon : ~30 MB  (não controlável via compose)
+#   postgres           : 80 MB
+#   api                : 200 MB
+#   Headroom restante  : ~200 MB (idem ao servidor real)
+#
+# memswap_limit = mem_limit desabilita swap — sem isso o container sobreviveria
+# a um OOM usando disco, mascarando o problema que existiria em produção.
+#
+# NODE_OPTIONS=--max-old-space-size=180 faz o V8 tentar GC antes de crescer
+# além de 180 MB, em vez de receber SIGKILL do kernel ao atingir 200 MB.
+
+services:
+  postgres:
+    mem_limit: 80m
+    memswap_limit: 80m
+    cpus: '0.3'
+
+  api:
+    mem_limit: 200m
+    memswap_limit: 200m
+    cpus: '0.7'
+    environment:
+      NODE_OPTIONS: '--max-old-space-size=180'
