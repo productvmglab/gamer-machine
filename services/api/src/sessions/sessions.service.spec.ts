@@ -12,6 +12,7 @@ const makePrismaMock = () =>
     },
     session: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -35,7 +36,6 @@ describe('SessionsService', () => {
     gateway = makeGatewayMock();
     service = new SessionsService(prisma, gateway);
     jest.useFakeTimers();
-    process.env.PRICE_PER_MINUTE_CENTS = '200';
   });
 
   afterEach(() => {
@@ -50,7 +50,7 @@ describe('SessionsService', () => {
 
     it('throws BadRequestException when balance is 0', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        id: 'user-1', phone: '11999999999', balance_cents: 0,
+        id: 'user-1', phone: '11999999999', balance_seconds: 0,
         created_at: new Date(), updated_at: new Date(),
       });
       await expect(service.startSession('user-1')).rejects.toThrow(BadRequestException);
@@ -58,7 +58,7 @@ describe('SessionsService', () => {
 
     it('throws BadRequestException when balance is negative', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        id: 'user-1', phone: '11999999999', balance_cents: -100,
+        id: 'user-1', phone: '11999999999', balance_seconds: -100,
         created_at: new Date(), updated_at: new Date(),
       });
       await expect(service.startSession('user-1')).rejects.toThrow(BadRequestException);
@@ -66,7 +66,7 @@ describe('SessionsService', () => {
 
     it('creates session and returns it when balance is positive', async () => {
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 1000,
+        id: 'user-1', phone: '11999999999', balance_seconds: 600,
         created_at: new Date(), updated_at: new Date(),
       };
       const mockSession = {
@@ -82,7 +82,7 @@ describe('SessionsService', () => {
     });
   });
 
-  describe('cost calculation (Math.ceil to nearest minute)', () => {
+  describe('session duration tracking (endSession)', () => {
     const makeSession = (durationSeconds: number) => ({
       id: 'session-1',
       user_id: 'user-1',
@@ -96,36 +96,37 @@ describe('SessionsService', () => {
       (prisma.session.findUnique as jest.Mock).mockResolvedValue(makeSession(durationSeconds));
       (prisma.$transaction as jest.Mock).mockResolvedValue([null, null]);
       (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ balance_seconds: 0 });
     };
 
-    it('1s → cost of 1 minute (200 cents)', async () => {
+    it('returns duration_seconds equal to elapsed time (1s)', async () => {
       setupEndSession(1);
       const result = await service.endSession('session-1');
-      expect(result.cost_cents).toBe(200);
+      expect(result.duration_seconds).toBe(1);
     });
 
-    it('60s → cost of 1 minute (200 cents)', async () => {
+    it('returns duration_seconds equal to elapsed time (60s)', async () => {
       setupEndSession(60);
       const result = await service.endSession('session-1');
-      expect(result.cost_cents).toBe(200);
+      expect(result.duration_seconds).toBe(60);
     });
 
-    it('61s → cost of 2 minutes (400 cents)', async () => {
-      setupEndSession(61);
-      const result = await service.endSession('session-1');
-      expect(result.cost_cents).toBe(400);
-    });
-
-    it('120s → cost of 2 minutes (400 cents)', async () => {
+    it('returns duration_seconds equal to elapsed time (120s)', async () => {
       setupEndSession(120);
       const result = await service.endSession('session-1');
-      expect(result.cost_cents).toBe(400);
+      expect(result.duration_seconds).toBe(120);
     });
 
-    it('121s → cost of 3 minutes (600 cents)', async () => {
-      setupEndSession(121);
+    it('always returns cost_cents = 0 (time-based billing, no per-minute cost)', async () => {
+      setupEndSession(300);
       const result = await service.endSession('session-1');
-      expect(result.cost_cents).toBe(600);
+      expect(result.cost_cents).toBe(0);
+    });
+
+    it('decrements balance_seconds by the session duration', async () => {
+      setupEndSession(120);
+      await service.endSession('session-1');
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 
@@ -143,6 +144,7 @@ describe('SessionsService', () => {
       });
       (prisma.$transaction as jest.Mock).mockResolvedValue([null, null]);
       (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ balance_seconds: 0 });
 
       await service.endSession('session-1');
       expect(prisma.$transaction).toHaveBeenCalled();
@@ -156,12 +158,13 @@ describe('SessionsService', () => {
       });
       (prisma.$transaction as jest.Mock).mockResolvedValue([null, null]);
       (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ balance_seconds: 0 });
 
       await service.endSession('session-1');
 
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { id: 'user-1', balance_cents: { lt: 0 } },
-        data: { balance_cents: 0 },
+        where: { id: 'user-1', balance_seconds: { lt: 0 } },
+        data: { balance_seconds: 0 },
       });
     });
 
@@ -173,6 +176,7 @@ describe('SessionsService', () => {
       });
       (prisma.$transaction as jest.Mock).mockResolvedValue([null, null]);
       (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ balance_seconds: 0 });
 
       await service.endSession('session-1');
 
@@ -180,10 +184,31 @@ describe('SessionsService', () => {
     });
   });
 
+  describe('findActiveSession', () => {
+    it('retorna sessão ativa do usuário (linha 69)', async () => {
+      const mockSession = {
+        id: 'session-1', user_id: 'user-1', started_at: new Date(), ended_at: null,
+      };
+      (prisma.session.findFirst as jest.Mock).mockResolvedValue(mockSession);
+
+      const result = await service.findActiveSession('user-1');
+
+      expect(prisma.session.findFirst).toHaveBeenCalledWith({
+        where: { user_id: 'user-1', ended_at: null },
+      });
+      expect(result).toEqual(mockSession);
+    });
+
+    it('retorna null quando usuário não tem sessão ativa', async () => {
+      (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
+      expect(await service.findActiveSession('user-1')).toBeNull();
+    });
+  });
+
   describe('timer behavior', () => {
     it('emits balance_update after 5 seconds', async () => {
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 600,
+        id: 'user-1', phone: '11999999999', balance_seconds: 600,
         created_at: new Date(), updated_at: new Date(),
       };
       const mockSession = {
@@ -198,16 +223,16 @@ describe('SessionsService', () => {
       await jest.advanceTimersByTimeAsync(5000);
 
       expect(gateway.emitBalanceUpdate).toHaveBeenCalledWith('user-1', expect.objectContaining({
-        balance_cents: 600,
+        balance_seconds: 600,
         session_id: 'session-1',
       }));
     });
 
     it('emits WARNING_1MIN exactly once when timeRemaining drops to ≤60s', async () => {
-      // 200 cents, price 200/min → 60s max. Started 1s ago → timeRemaining = 59s ≤ 60s on first tick.
+      // balance_seconds=61, started 1s ago → after first tick (6s elapsed): 61-6=55s ≤ 60s → WARNING_1MIN
       const startedAt = new Date(Date.now() - 1000);
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 200,
+        id: 'user-1', phone: '11999999999', balance_seconds: 61,
         created_at: new Date(), updated_at: new Date(),
       };
       const mockSession = {
@@ -222,7 +247,7 @@ describe('SessionsService', () => {
 
       await service.startSession('user-1');
 
-      // First tick: 1s already elapsed + 5s = 6s; timeRemaining = 54s ≤ 60s → WARNING_1MIN
+      // First tick: WARNING_1MIN should fire
       await jest.advanceTimersByTimeAsync(5000);
 
       const count1 = (gateway.emitWarning as jest.Mock).mock.calls.filter(
@@ -239,10 +264,10 @@ describe('SessionsService', () => {
     });
 
     it('emits WARNING_30SEC exactly once when timeRemaining drops to ≤30s', async () => {
-      // 100 cents, price 200/min → 30s max. Started 1s ago → timeRemaining = 24s ≤ 30s on first tick.
+      // balance_seconds=31, started 1s ago → after first tick (6s elapsed): 31-6=25s ≤ 30s → WARNING_30SEC
       const startedAt = new Date(Date.now() - 1000);
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 100,
+        id: 'user-1', phone: '11999999999', balance_seconds: 31,
         created_at: new Date(), updated_at: new Date(),
       };
       const mockSession = {
@@ -271,11 +296,37 @@ describe('SessionsService', () => {
       expect(count30Again).toBe(1);
     });
 
+    it('limpa o timer e não lança exceção quando findUnique falha no tick (linha 60-61)', async () => {
+      const mockUser = {
+        id: 'user-1', phone: '11999999999', balance_seconds: 600,
+        created_at: new Date(), updated_at: new Date(),
+      };
+      const mockSession = {
+        id: 'session-1', user_id: 'user-1', started_at: new Date(),
+        ended_at: null, duration_seconds: null, cost_cents: null,
+      };
+      (prisma.user.findUnique as jest.Mock)
+        .mockResolvedValueOnce(mockUser)                          // chamada do startSession
+        .mockRejectedValueOnce(new Error('DB connection lost'));  // primeiro tick do timer
+
+      (prisma.session.create as jest.Mock).mockResolvedValue(mockSession);
+
+      await service.startSession('user-1');
+
+      // O tick deve capturar o erro sem propagar exceção
+      await expect(jest.advanceTimersByTimeAsync(5000)).resolves.not.toThrow();
+
+      // Timer foi limpo: segundo tick não chama emitBalanceUpdate
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(gateway.emitBalanceUpdate).not.toHaveBeenCalled();
+    });
+
     it('calls endSession (emits SESSION_ENDED) when timeRemaining reaches 0', async () => {
-      // 1 cent, price 200/min → 0.3s max. Started 61s ago → already expired on first tick.
+      // balance_seconds=60, started 61s ago → after first tick (66s elapsed): 60-66=-6 ≤ 0 → SESSION_ENDED
       const startedAt = new Date(Date.now() - 61000);
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 1,
+        id: 'user-1', phone: '11999999999', balance_seconds: 60,
         created_at: new Date(), updated_at: new Date(),
       };
       const mockSession = {

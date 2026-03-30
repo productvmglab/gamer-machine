@@ -44,12 +44,13 @@ describe('PaymentsService', () => {
   describe('createPix', () => {
     it('creates a Payment record with the correct abacatepay_id', async () => {
       const mockUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 0,
+        id: 'user-1', phone: '11999999999', balance_seconds: 0,
         created_at: new Date(), updated_at: new Date(),
       };
       const pixData = { id: 'abacate-123', brCode: 'pix-code', brCodeBase64: 'base64data' };
+      // pack_5min: price_cents=1000, balance_seconds=300 (5 minutes)
       const mockPayment = {
-        id: 'pay-1', user_id: 'user-1', amount_cents: 500,
+        id: 'pay-1', user_id: 'user-1', amount_cents: 1000, balance_seconds: 300,
         abacatepay_id: 'abacate-123', status: 'pending',
         qr_code: 'base64data', qr_code_text: 'pix-code',
         created_at: new Date(),
@@ -63,7 +64,11 @@ describe('PaymentsService', () => {
 
       expect(result.payment.abacatepay_id).toBe('abacate-123');
       expect(prisma.payment.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ abacatepay_id: 'abacate-123', amount_cents: 500 }),
+        data: expect.objectContaining({
+          abacatepay_id: 'abacate-123',
+          amount_cents: 1000,
+          balance_seconds: 300,
+        }),
       });
     });
   });
@@ -84,7 +89,7 @@ describe('PaymentsService', () => {
 
     it('returns {received:true} idempotently when payment is already paid', async () => {
       (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
-        id: 'pay-1', user_id: 'user-1', amount_cents: 500,
+        id: 'pay-1', user_id: 'user-1', amount_cents: 1000, balance_seconds: 300,
         abacatepay_id: 'abacate-123', status: 'paid',
         qr_code: null, qr_code_text: null, created_at: new Date(),
       });
@@ -95,12 +100,12 @@ describe('PaymentsService', () => {
 
     it('happy path: updates status, increments balance, emits payment_confirmed', async () => {
       const pendingPayment = {
-        id: 'pay-1', user_id: 'user-1', amount_cents: 500,
+        id: 'pay-1', user_id: 'user-1', amount_cents: 1000, balance_seconds: 300,
         abacatepay_id: 'abacate-123', status: 'pending',
         qr_code: null, qr_code_text: null, created_at: new Date(),
       };
       const updatedUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 1500,
+        id: 'user-1', phone: '11999999999', balance_seconds: 300,
         created_at: new Date(), updated_at: new Date(),
       };
 
@@ -112,18 +117,18 @@ describe('PaymentsService', () => {
 
       expect(result).toEqual({ received: true });
       expect(prisma.$transaction).toHaveBeenCalled();
-      expect(gateway.emitPaymentConfirmed).toHaveBeenCalledWith('user-1', 1500);
+      expect(gateway.emitPaymentConfirmed).toHaveBeenCalledWith('user-1', 300);
     });
 
     it('idempotency: calling twice with same ID increments balance only once', async () => {
       const pendingPayment = {
-        id: 'pay-1', user_id: 'user-1', amount_cents: 500,
+        id: 'pay-1', user_id: 'user-1', amount_cents: 1000, balance_seconds: 300,
         abacatepay_id: 'abacate-123', status: 'pending',
         qr_code: null, qr_code_text: null, created_at: new Date(),
       };
       const paidPayment = { ...pendingPayment, status: 'paid' };
       const updatedUser = {
-        id: 'user-1', phone: '11999999999', balance_cents: 1500,
+        id: 'user-1', phone: '11999999999', balance_seconds: 300,
         created_at: new Date(), updated_at: new Date(),
       };
 
