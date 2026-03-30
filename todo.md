@@ -1,6 +1,13 @@
-- [ ] alterar sistema de creditos, para vender pacotes ao inves de horas brutas.
-  - [ ] pacotes: R$10 5min, R$20 15min, R$40 35min, R$60 60min
-  - [ ] ajustar no bonus ao completar perfil, deve dar 5 min de saldo
-- [ ] destacar botoes do topo do dashboard(perfil, sair e botao de voltar)
-- [ ] o bonus que vamos dar para os clientes da barbearia, deve ser reduzido para uma unica vez, nao a cada 15 dias como esta hoje
-- [ ] no admin, antes de adicionar saldo para o usuario, verificar se ja foi creditado o bonus de R$10 no primeiro corte, caso o usuario ja tenha recebido, deve mostrar um modal de confirmação para o admin informando q esse valor deverá ser cobrado e perguntar se ele quer prosseguir com a recarga
+- [x] alterar sistema de creditos, para vender pacotes ao inves de horas brutas.
+  - [x] pacotes: R$10 5min, R$20 15min, R$40 35min, R$60 60min
+  - [x] ajustar no bonus ao completar perfil, deve dar 5 min de saldo
+- [x] destacar botoes do topo do dashboard(perfil, sair e botao de voltar)
+- [x] o bonus que vamos dar para os clientes da barbearia, deve ser reduzido para uma unica vez, nao a cada 15 dias como esta hoje
+- [x] no admin, antes de adicionar saldo para o usuario, verificar se ja foi creditado o bonus de R$10 no primeiro corte, caso o usuario ja tenha recebido, deve mostrar um modal de confirmação para o admin informando q esse valor deverá ser cobrado e perguntar se ele quer prosseguir com a recarga
+
+- [x] - tem q bloquear o alt+tab e alt+f4 no machine-guard
+- [x] - o botão de adicionar bonus pro usuario, no admin, só habilita qndo o nome do usuario está preenchido. a ideia é essa mesma, mas gostaria q ele ficasse com a aparencia normal e ao clicar, avisar o admin q precisa informar o nome do usuario caso ele ainda nao tenha feito.
+- [ ] - deploy api
+- [ ] - setup SMS & email
+- [ ] - build exe
+- [ ] - deploy admin
